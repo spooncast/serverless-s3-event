@@ -13,9 +13,6 @@ class S3EventDeploy {
         options: {
           'continue-on-error' : {
             usage: 'Can be used to attempt a partial deploy, where not all functions are available/deployed. They will be skipped and not attmepted.'
-          },
-          help: {
-            usage: 'See https://github.com/matt-filion/serverless-put-s3-event for detailed documentation.'
           }
         }
       },

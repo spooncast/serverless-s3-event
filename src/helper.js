@@ -63,13 +63,11 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
   })
   // remove same id
   const filteredListBySameId = _.objMap(originList, (configurations) => {
-    const temp = _.objFilter(configurations, (configuration) => {
+    return _.objFilter(configurations, (configuration) => {
       const isSame = addList.map(addItem => addItem.value.Id).includes(configuration.Id)
       if (isSame) cliLog(chalk.yellow(`remove NotificationConfiguration ${configuration.Id}`))
       return !isSame
     })
-    console.log('after_configurations', temp)
-    return temp
   })
   // force remove
   const removeEventAndSuffix = (list) => {
@@ -93,7 +91,7 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
   return removedList
 }
 
-const pushNotification = async (filteredList, putConfiguration) => {
+const pushNotification = (filteredList, putConfiguration) => {
   const _filteredList = JSON.parse(JSON.stringify(filteredList))
   const additionalNotificationConfiguration = putConfiguration.NotificationConfiguration
 
@@ -104,14 +102,14 @@ const pushNotification = async (filteredList, putConfiguration) => {
     })
   }).flatten().value()
 
-  return _.map(addList, addItem => _filteredList[addItem.key].push(addItem.value))
+  _.map(addList, addItem => _filteredList[addItem.key].push(addItem.value))
+  return _filteredList
 }
 
 const putS3Event = async (originList, putConfiguration, serverless) => {
   const s3 = getS3Client(serverless)
   const bucketName = putConfiguration.BucketName 
   const params = { Bucket: bucketName, NotificationConfiguration: originList }
-  console.log('[result]', JSON.stringify(params, null, 2))
   await s3.putBucketNotificationConfiguration(params).promise()
 } 
 
