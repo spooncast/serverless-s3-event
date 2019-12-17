@@ -65,5 +65,5 @@ sls s3deploy --force
 ```
 ```bash
 # The remove command deletes events with id that match the resource recorded in the custom in serverless.yaml
-sls s3remove --force
+sls s3remove
 ```
