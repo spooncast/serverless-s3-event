@@ -60,7 +60,7 @@ custom:
 sls s3deploy 
 ```
 ```bash
-# The force option removes events with a matching event type and suffix. (preffix not supported)
+# The force option removes events with a matching event type and suffix. (prefix not supported)
 sls s3deploy --force
 ```
 ```bash
