@@ -92,7 +92,6 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
             isMatchedSuffix = true
           }
           const isMatched = isMatchedEvent && isMatchedSuffix
-          console.log('isMatched', isMatched)
           if (isMatched) cliLog(chalk.yellow(`remove NotificationConfiguration ${configuration.Id}`))
           return isMatched
         })
