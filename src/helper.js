@@ -56,9 +56,12 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
     }).flatten().value()
   const comparisonList = _.map(addList, addItem => {
     const events = addItem.value.Events
-    const suffix = _.chain(addItem.value.Filter.Key.FilterRules)
-      .filter(rule => rule.Name = 'Suffix')
-      .map(rule => rule.Value).value()[0]
+    let suffix
+    if (addItem.value.Filter) {
+      suffix = _.chain(addItem.value.Filter.Key.FilterRules)
+        .filter(rule => rule.Name === 'Suffix')
+        .map(rule => rule.Value).value()[0]
+    }
     return { events, suffix }
   })
   // remove same id
@@ -73,19 +76,29 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
   const removeEventAndSuffix = (list) => {
     return _.objMap(list, (configurations) => {
       return _.objFilter(configurations, (configuration) => {
-        const matchedList = _.objFilter(comparisonList, comparisonItem => {
+        const filteredConfiguration = _.objFilter(comparisonList, comparisonItem => {
           const isMatchedEvent = _.objFilter(comparisonItem.events, event => configuration.Events.includes(event)).length > 0
-          const configurationSuffix = _.chain(configuration.Filter.Key.FilterRules)
-            .filter(rule => rule.Name === 'Suffix')
-            .map(rule => rule.Value).value()[0]
-          const isMatchedSuffix = comparisonItem.suffix === configurationSuffix
+
+          let configurationSuffix
+          let isMatchedSuffix
+          if (configuration.Filter) {
+            configurationSuffix = _.chain(configuration.Filter.Key.FilterRules)
+              .filter(rule => rule.Name === 'Suffix')
+              .map(rule => rule.Value).value()[0]
+            isMatchedSuffix = comparisonItem.suffix === configurationSuffix
+                || comparisonItem.suffix === undefined
+                || configurationSuffix === undefined
+          } else {
+            isMatchedSuffix = true
+          }
           const isMatched = isMatchedEvent && isMatchedSuffix
+          console.log('isMatched', isMatched)
           if (isMatched) cliLog(chalk.yellow(`remove NotificationConfiguration ${configuration.Id}`))
-          return !isMatched
+          return isMatched
         })
-        return matchedList.length === 0
+        return filteredConfiguration.length === 0
       })
-    })  
+    })
   }
   const removedList = isForce ? removeEventAndSuffix(filteredListBySameId) : filteredListBySameId
   return removedList
@@ -108,10 +121,10 @@ const pushNotification = (filteredList, putConfiguration) => {
 
 const putS3Event = async (originList, putConfiguration, serverless) => {
   const s3 = getS3Client(serverless)
-  const bucketName = putConfiguration.BucketName 
+  const bucketName = putConfiguration.BucketName
   const params = { Bucket: bucketName, NotificationConfiguration: originList }
   await s3.putBucketNotificationConfiguration(params).promise()
-} 
+}
 
 const putS3NotificationConfigurations = async (serverless, options) => {
   if (!serverless.service.custom || !serverless.service.custom.BucketConfigurations) {
