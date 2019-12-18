@@ -13,8 +13,8 @@ const objMap = (collection, iteratee) => {
   fn = collection.constructor === Object ? keyByMap : _.map
   return fn(collection, iteratee)
 }
- 
-const objFilter = (collection, iteratee) => { 
+
+const objFilter = (collection, iteratee) => {
   if (!iteratee) return
   const keyByFilter = (collection, iteratee) => {
     return _.chain(collection)
@@ -29,6 +29,9 @@ const objFilter = (collection, iteratee) => {
 _.mixin( { objMap })
 _.mixin( { objFilter })
 
+const getRegion = async (serverless) => await serverless.getProvider('aws').getRegion()
+const getAccountId = async (serverless) => await serverless.getProvider('aws').getAccountId()
+
 const getS3Client = (serverless) => {
   const provider = serverless.getProvider('aws')
   const awsCredentials = provider.getCredentials()
@@ -37,7 +40,7 @@ const getS3Client = (serverless) => {
 }
 
 const getOriginList = async (putConfiguration, serverless) => {
-  const bucketName = putConfiguration.BucketName 
+  const bucketName = putConfiguration.BucketName
   const s3 = getS3Client(serverless)
   const originList = await s3.getBucketNotificationConfiguration({ Bucket: bucketName }).promise()
   return originList
@@ -77,8 +80,20 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
     return _.objMap(list, (configurations) => {
       return _.objFilter(configurations, (configuration) => {
         const filteredConfiguration = _.objFilter(comparisonList, comparisonItem => {
-          const isMatchedEvent = _.objFilter(comparisonItem.events, event => configuration.Events.includes(event)).length > 0
-
+          const isMatchedEvent = _.objFilter(comparisonItem.events, comparisonEvent => {
+            const isIncludedByWildcards = _.objFilter(configuration.Events, originEvent => {
+              const splitOriginEvent = originEvent.split(':')
+              const splitComparisonEvent = comparisonEvent.split(':')
+              if (splitOriginEvent[0] === splitComparisonEvent[0] &&
+                  splitOriginEvent[1] === splitComparisonEvent[1]) {
+                if ((splitOriginEvent[2] === '*' || splitComparisonEvent[2] === '*') ||
+                     splitOriginEvent[2] === splitComparisonEvent[2]) {
+                  return true
+                }
+              }
+            }).length > 0
+            return isIncludedByWildcards
+          }).length > 0
           let configurationSuffix
           let isMatchedSuffix
           if (configuration.Filter) {
@@ -125,17 +140,40 @@ const putS3Event = async (originList, putConfiguration, serverless) => {
   await s3.putBucketNotificationConfiguration(params).promise()
 }
 
+const parsingRegionAndAccountId = (putList, region, accountId) => {
+  const parsingList = _.objMap(putList, configurations => {
+    return _.objMap(configurations, configuration => {
+      return _.objMap(configuration, (value, key) => {
+        const arnNameList = ['LambdaFunctionArn', 'TopicArn', 'QueueArn']
+        if (arnNameList.includes(key)) {
+          const regExpAccountId = new RegExp(`#{aws::accountid}`, 'gi')
+          const regExpRegion = new RegExp(`#{aws::region}`, 'gi')
+          value = value.replace(regExpAccountId, accountId).replace(regExpRegion, region)
+        }
+        return value
+      })
+    })
+  })
+  return parsingList
+}
+
 const putS3NotificationConfigurations = async (serverless, options) => {
   if (!serverless.service.custom || !serverless.service.custom.BucketConfigurations) {
     serverless.cli.consoleLog(`Serverless: ${chalk.yellow(`Not found BucketConfigurations`)}`)
   }
+
+  const region = await getRegion(serverless)
+  const accountId = await getAccountId(serverless)
+
   const custom = serverless.service.custom
   const bucketConfigurations = custom.BucketConfigurations
   const promiseTask = _.map(bucketConfigurations, async putConfiguration => {
     const originList = await getOriginList(putConfiguration, serverless)
     const removedList = removeS3Event(originList, putConfiguration, options, serverless)
     const putList = pushNotification(removedList, putConfiguration)
-    return putS3Event(putList, putConfiguration, serverless)
+    const parsingList = parsingRegionAndAccountId(putList, region, accountId)
+
+    return putS3Event(parsingList, putConfiguration, serverless)
   })
   try {
     await Promise.all(promiseTask)
@@ -162,6 +200,7 @@ const removeS3NotificationConfigurations = async (serverless) => {
   } catch (e) {
     serverless.cli.consoleLog(`Serverless: ${chalk.yellow(`remove NotificationConfiguration fail (${e})`)}`)
   }
+
 }
 
 module.exports = {
