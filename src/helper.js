@@ -100,7 +100,7 @@ const removeS3Event = (originList, putConfiguration, options, serverless) => {
             configurationSuffix = _.chain(configuration.Filter.Key.FilterRules)
               .filter(rule => rule.Name === 'Suffix')
               .map(rule => rule.Value).value()[0]
-            isMatchedSuffix = comparisonItem.suffix === configurationSuffix
+            isMatchedSuffix = comparisonItem.suffix.replace(/\./g, '') === configurationSuffix.replace(/\./g, '')
                 || comparisonItem.suffix === undefined
                 || configurationSuffix === undefined
           } else {
